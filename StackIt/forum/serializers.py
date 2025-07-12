@@ -39,6 +39,12 @@ class CommentSerializer(serializers.ModelSerializer):
 class AnswerSerializer(serializers.ModelSerializer):
     author = UserMinimalSerializer(read_only=True)
     # Remove author_id from required fields, we'll set it automatically from request
+    question_id = serializers.PrimaryKeyRelatedField(
+        queryset=Question.objects.all(),
+        required=False,
+        write_only=True,
+        source='question'
+    )
     vote_count = serializers.IntegerField(read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
     is_upvoted = serializers.SerializerMethodField()
@@ -46,7 +52,7 @@ class AnswerSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Answer
-        fields = ['id', 'content', 'author', 'author_id', 'vote_count', 'created_at', 
+        fields = ['id', 'content', 'author', 'question_id', 'vote_count', 'created_at', 
                   'updated_at', 'is_accepted', 'comments', 'is_upvoted', 'is_downvoted']
                   
     def get_is_upvoted(self, obj):
@@ -78,7 +84,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Question
-        fields = ['id', 'title', 'slug', 'author', 'tags', 'created_at', 
+        fields = ['id', 'title', 'author', 'tags', 'created_at', 
                   'updated_at', 'vote_count', 'answer_count', 'is_answered']
                   
     def get_is_answered(self, obj):
@@ -103,10 +109,9 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Question
-        fields = ['id', 'title', 'slug', 'description', 'author', 'tags', 'tag_ids',
+        fields = ['id', 'title', 'description', 'author', 'tags', 'tag_ids',
                   'created_at', 'updated_at', 'vote_count', 'answers', 
                   'views_count', 'is_upvoted', 'is_downvoted']
-        extra_kwargs = {'slug': {'read_only': True}}
         
     def get_answers(self, obj):
         """Get answers sorted by accepted status and votes"""

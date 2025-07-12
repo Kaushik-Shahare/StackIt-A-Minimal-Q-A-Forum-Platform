@@ -16,7 +16,7 @@ class QuestionAdmin(admin.ModelAdmin):
     list_display = ('title', 'author', 'created_at', 'answer_count', 'vote_count')
     list_filter = ('created_at', 'tags')
     search_fields = ('title', 'description', 'author__email')
-    readonly_fields = ('slug', 'created_at', 'updated_at', 'views_count')
+    readonly_fields = ('created_at', 'updated_at', 'views_count')
     filter_horizontal = ('tags', 'upvotes', 'downvotes')
     
     def answer_count(self, obj):

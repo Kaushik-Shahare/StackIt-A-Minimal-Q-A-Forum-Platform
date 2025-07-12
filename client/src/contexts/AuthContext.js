@@ -1,6 +1,8 @@
 "use client"
 import { createContext, useContext, useState, useEffect } from "react"
-
+import { useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
+import authService from "../services/authservice";
 const AuthContext = createContext()
 
 export function useAuth() {
@@ -14,38 +16,98 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-
+  const [error, setError] = useState(null);
+  const [hasProfile, setHasProfile] = useState(false);
+  const router = useRouter();
   useEffect(() => {
-    // Simulate checking for logged-in user
-    const savedUser = localStorage.getItem("stackit_user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
+    // Check if user is logged in
+    const token = localStorage.getItem('token') || Cookies.get('token');
+    if (token) {
+      console.log('AuthContext init: Token found, loading user');
+      loadUser(token);
+    } else {
+      console.log('AuthContext init: No token found, skipping user load');
+      setLoading(false);
     }
-    setLoading(false)
-  }, [])
+  }, []);
+  
 
-  const login = (userData) => {
-    const user = {
-      id: userData.id || Date.now(),
-      username: userData.username,
-      email: userData.email,
-      role: userData.role || "user",
-      avatar: userData.avatar || `https://ui-avatars.com/api/?name=${userData.username}&background=3b82f6&color=fff`,
+  const register = async (userData) => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Use real API service
+      await authService.register(userData);
+      setLoading(false);
+      router.push('/login?registered=true');
+      return true;
+    } catch (err) {
+      setLoading(false);
+      setError(err.message || 'Registration failed');
+      return false;
     }
-    setUser(user)
-    localStorage.setItem("stackit_user", JSON.stringify(user))
-  }
+  };
+
+  const loadUser = async (token) => {
+    try {
+      const res = await authService.loadUser();
+      setUser(res.user);
+      setHasProfile(res.hasProfile);
+      setLoading(false);
+    } catch (err) {
+      localStorage.removeItem('token');
+      Cookies.remove('token');
+      localStorage.removeItem('refreshToken');
+      setUser(null);
+      setHasProfile(false);
+      setLoading(false);
+      setError(err.message || 'Authentication failed. Please log in again.');
+    }
+  };
+
+  const login = async (email, password) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await authService.login(email, password);
+      Cookies.set('token', res.token, { expires: 1 });
+      localStorage.setItem('token', res.token);
+      localStorage.setItem('user', JSON.stringify(res.user));
+      setUser(res.user);
+      setHasProfile(res.hasProfile);
+      setLoading(false);
+      if (res.user.user_type === 'Doctor') {
+        router.push('/doctor');
+      } else if (res.user.user_type === 'Patient') {
+        router.push('/dashboard');
+      } else {
+        router.push('/admin/dashboard');
+      }
+      setLoading(false);
+      return true;
+    } catch (err) {
+      setLoading(false);
+      setError(err.message || 'Invalid credentials');
+      return false;
+    }
+  };
 
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem("stackit_user")
+    Cookies.remove('token');
+    authService.logout();
+    setUser(null);
+    router.push('/login');
   }
 
   const value = {
     user,
+    loading,
+    error,
+    hasProfile,
+    register,
     login,
     logout,
-    loading,
+    isAuthenticated: !!user,
     isAdmin: user?.role === "admin",
   }
 

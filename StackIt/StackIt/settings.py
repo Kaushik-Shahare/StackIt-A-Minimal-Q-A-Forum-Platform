@@ -50,7 +50,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
     # 'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',  # drf-spectacular settings
-    'EXCEPTION_HANDLER': 'MedAudit.exception_handler.custom_exception_handler',
+    'EXCEPTION_HANDLER': 'StackIt.exception_handler.custom_exception_handler',
 }
 
 SIMPLE_JWT = {
@@ -92,9 +92,12 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework_simplejwt",
     "cloudinary",
+    "django_filters",
+    "rest_framework_nested",
     
     # Custom apps
     "account",
+    "forum",
 ]
 
 MIDDLEWARE = [

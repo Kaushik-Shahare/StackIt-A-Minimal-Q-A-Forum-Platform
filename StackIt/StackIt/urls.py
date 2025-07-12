@@ -22,4 +22,5 @@ from django.conf import settings
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('api/auth/', include('account.urls')),
+    path('api/forum/', include('forum.urls')),
 ]

@@ -230,7 +230,8 @@ To test these endpoints:
 
 ## 🧑‍💻 Author
 
-Developed by [Your Name]  
+Developed by @Scharfcsh @Kaushik_shahare @Golu-kumar
+
 Contributions, forks, and ideas are welcome.
 
 ---

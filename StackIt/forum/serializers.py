@@ -23,27 +23,22 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     author = UserMinimalSerializer(read_only=True)
-    author_id = serializers.PrimaryKeyRelatedField(
-        write_only=True,
-        queryset=User.objects.all(),
-        source='author'
-    )
+    # Remove author_id from required fields, we'll set it automatically from request
     
     class Meta:
         model = Comment
-        fields = ['id', 'content', 'author', 'author_id', 'created_at', 'updated_at']
-        extra_kwargs = {'author_id': {'write_only': True}}
+        fields = ['id', 'content', 'author', 'created_at', 'updated_at']
         
     def create(self, validated_data):
+        # Set author from the request context
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['author'] = request.user
         return Comment.objects.create(**validated_data)
 
 class AnswerSerializer(serializers.ModelSerializer):
     author = UserMinimalSerializer(read_only=True)
-    author_id = serializers.PrimaryKeyRelatedField(
-        write_only=True,
-        queryset=User.objects.all(),
-        source='author'
-    )
+    # Remove author_id from required fields, we'll set it automatically from request
     vote_count = serializers.IntegerField(read_only=True)
     comments = CommentSerializer(many=True, read_only=True)
     is_upvoted = serializers.SerializerMethodField()
@@ -67,6 +62,10 @@ class AnswerSerializer(serializers.ModelSerializer):
         return False
         
     def create(self, validated_data):
+        # Set author from the request context
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['author'] = request.user
         return Answer.objects.create(**validated_data)
 
 class QuestionListSerializer(serializers.ModelSerializer):
@@ -89,11 +88,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
 class QuestionDetailSerializer(serializers.ModelSerializer):
     """Serializer for detailed question view"""
     author = UserMinimalSerializer(read_only=True)
-    author_id = serializers.PrimaryKeyRelatedField(
-        write_only=True,
-        queryset=User.objects.all(),
-        source='author'
-    )
+    # Remove author_id from required fields, we'll set it automatically from request
     tags = TagSerializer(many=True, read_only=True)
     tag_ids = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -108,7 +103,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Question
-        fields = ['id', 'title', 'slug', 'description', 'author', 'author_id', 'tags', 'tag_ids',
+        fields = ['id', 'title', 'slug', 'description', 'author', 'tags', 'tag_ids',
                   'created_at', 'updated_at', 'vote_count', 'answers', 
                   'views_count', 'is_upvoted', 'is_downvoted']
         extra_kwargs = {'slug': {'read_only': True}}

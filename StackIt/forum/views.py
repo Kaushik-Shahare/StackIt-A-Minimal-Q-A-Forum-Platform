@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, mixins, generics, filters
+from rest_framework import viewsets, status, mixins, generics, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
@@ -19,7 +19,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         answer_count=Count('answers', distinct=True)
     )
     permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
-    lookup_field = 'slug'
+    lookup_field = 'id'
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description', 'tags__name']
     ordering_fields = ['created_at', 'vote_count', 'answer_count', 'views_count']
@@ -41,7 +41,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return super().retrieve(request, *args, **kwargs)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def upvote(self, request, slug=None):
+    def upvote(self, request, pk=None):
         """Upvote a question"""
         question = self.get_object()
         user = request.user
@@ -60,7 +60,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         return Response({'status': 'upvoted'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def downvote(self, request, slug=None):
+    def downvote(self, request, pk=None):
         """Downvote a question"""
         question = self.get_object()
         user = request.user
@@ -84,18 +84,43 @@ class AnswerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     
     def get_queryset(self):
+        # If we're accessing through the nested route
+        if 'question_pk' in self.kwargs:
+            question_id = self.kwargs['question_pk']
+        elif 'question_id' in self.kwargs:
+            question_id = self.kwargs['question_id']
+        else:
+            # If we're accessing through the direct route
+            return Answer.objects.all().annotate(
+                vote_count=Count('upvotes', distinct=True) - Count('downvotes', distinct=True)
+            ).order_by('-is_accepted', '-vote_count', '-created_at')
+            
+        # Filter by question ID
         return Answer.objects.filter(
-            question__slug=self.kwargs['question_slug']
+            question_id=question_id
         ).annotate(
             vote_count=Count('upvotes', distinct=True) - Count('downvotes', distinct=True)
         ).order_by('-is_accepted', '-vote_count', '-created_at')
     
     def perform_create(self, serializer):
-        question = get_object_or_404(Question, slug=self.kwargs['question_slug'])
-        serializer.save(author=self.request.user, question=question)
+        # If question_id is provided in request body, it's already set in validated_data
+        if 'question' not in serializer.validated_data:
+            # If not in request body, get it from the URL parameter
+            if 'question_pk' in self.kwargs:
+                question = get_object_or_404(Question, id=self.kwargs['question_pk'])
+                serializer.save(author=self.request.user, question=question)
+            elif 'question_id' in self.kwargs:
+                question = get_object_or_404(Question, id=self.kwargs['question_id'])
+                serializer.save(author=self.request.user, question=question)
+            else:
+                # If neither provided, raise an error
+                raise serializers.ValidationError({"question_id": "This field is required."})
+        else:
+            # Question already set from request body, just set the author
+            serializer.save(author=self.request.user)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def accept(self, request, question_slug=None, pk=None):
+    def accept(self, request, question_pk=None, question_id=None, pk=None):
         """Mark an answer as accepted (only by question owner)"""
         answer = self.get_object()
         question = answer.question
@@ -114,7 +139,7 @@ class AnswerViewSet(viewsets.ModelViewSet):
         return Response({'status': 'accepted' if answer.is_accepted else 'unaccepted'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def upvote(self, request, question_slug=None, pk=None):
+    def upvote(self, request, question_pk=None, question_id=None, pk=None):
         """Upvote an answer"""
         answer = self.get_object()
         user = request.user
@@ -133,7 +158,7 @@ class AnswerViewSet(viewsets.ModelViewSet):
         return Response({'status': 'upvoted'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def downvote(self, request, question_slug=None, pk=None):
+    def downvote(self, request, question_pk=None, question_id=None, pk=None):
         """Downvote an answer"""
         answer = self.get_object()
         user = request.user
@@ -157,16 +182,22 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     
     def get_queryset(self):
+        answer_param = self.kwargs.get('answer_pk') or self.kwargs.get('answer_id')
+        question_param = self.kwargs.get('question_pk') or self.kwargs.get('question_id')
+        
         return Comment.objects.filter(
-            answer__id=self.kwargs['answer_pk'],
-            answer__question__slug=self.kwargs['question_slug']
+            answer__id=answer_param,
+            answer__question__id=question_param
         )
     
     def perform_create(self, serializer):
+        answer_param = self.kwargs.get('answer_pk') or self.kwargs.get('answer_id')
+        question_param = self.kwargs.get('question_pk') or self.kwargs.get('question_id')
+        
         answer = get_object_or_404(
             Answer, 
-            id=self.kwargs['answer_pk'],
-            question__slug=self.kwargs['question_slug']
+            id=answer_param,
+            question__id=question_param
         )
         serializer.save(author=self.request.user, answer=answer)
 
@@ -175,7 +206,6 @@ class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
-    lookup_field = 'slug'
     
     def get_permissions(self):
         """Custom permissions: anyone can view, only admins can create/edit/delete"""

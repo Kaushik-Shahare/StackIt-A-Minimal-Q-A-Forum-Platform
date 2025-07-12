@@ -26,7 +26,6 @@ class Tag(models.Model):
 class Question(models.Model):
     """Model for questions"""
     title = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=255, unique=True, blank=True)
     description = models.TextField()  # Rich text content
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='questions')
     tags = models.ManyToManyField(Tag, related_name='questions')
@@ -47,11 +46,6 @@ class Question(models.Model):
         return self.answers.count()
     
     def save(self, *args, **kwargs):
-        if not self.slug:
-            # Create a unique slug based on title
-            base_slug = slugify(self.title)
-            unique_id = str(uuid.uuid4())[:8]
-            self.slug = f"{base_slug}-{unique_id}"
         super().save(*args, **kwargs)
     
     def __str__(self):
